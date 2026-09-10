@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emalawi19 Authentication</title>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import {
+            getAuth,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            sendEmailVerification,
+            signOut,
+            onAuthStateChanged
+        } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
+        /*
+         * ==========================================
+         * FIREBASE CONFIGURATION
+         * ==========================================
+         * We will replace these values with the
+         * configuration from your Firebase project.
+         */
+
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.firebasestorage.app",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const registerForm = document.getElementById("registerForm");
+        const loginForm = document.getElementById("loginForm");
+
+        const registerEmail = document.getElementById("registerEmail");
+        const registerPassword = document.getElementById("registerPassword");
+
+        const loginEmail = document.getElementById("loginEmail");
+        const loginPassword = document.getElementById("loginPassword");
+
+        const message = document.getElementById("message");
+
+        const authSection = document.getElementById("authSection");
+        const dashboard = document.getElementById("dashboard");
+
+        const userEmail = document.getElementById("userEmail");
+        const verificationStatus = document.getElementById("verificationStatus");
+
+        const resendButton = document.getElementById("resendButton");
+        const logoutButton = document.getElementById("logoutButton");
+
+        const loginTab = document.getElementById("loginTab");
+        const registerTab = document.getElementById("registerTab");
+
+        const loginBox = document.getElementById("loginBox");
+        const registerBox = document.getElementById("registerBox");
+
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = "message " + type;
+        }
+
+        function showLogin() {
+            loginTab.classList.add("active");
+            registerTab.classList.remove("active");
+
+            loginBox.classList.add("visible");
+            registerBox.classList.remove("visible");
+
+            showMessage("", "");
+        }
+
+        function showRegister() {
+            registerTab.classList.add("active");
+            loginTab.classList.remove("active");
+
+            registerBox.classList.add("visible");
+            loginBox.classList.remove("visible");
+
+            showMessage("", "");
+        }
+
+        loginTab.addEventListener("click", showLogin);
+        registerTab.addEventListener("click", showRegister);
+
+        /*
+         * ==========================================
+         * REGISTER
+         * ==========================================
+         */
+
+        registerForm.addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const email = registerEmail.value.trim();
+            const password = registerPassword.value;
+
+            if (password.length < 6) {
+                showMessage(
+                    "Password must contain at least 6 characters.",
+                    "error"
+                );
+                return;
+            }
+
+            try {
+                showMessage("Creating your account...", "info");
+
+                const userCredential =
+                    await createUserWithEmailAndPassword(
+                        auth,
+                        email,
+                        password
+                    );
+
+                await sendEmailVerification(userCredential.user);
+
+                showMessage(
+                    "Account created! Please check your email and click the verification link.",
+                    "success"
+                );
+
+                registerForm.reset();
+
+            } catch (error) {
+
+                if (error.code === "auth/email-already-in-use") {
+                    showMessage(
+                        "This email is already registered.",
+                        "error"
+                    );
+                } else if (error.code === "auth/invalid-email") {
+                    showMessage(
+                        "Please enter a valid email address.",
+                        "error"
+                    );
+                } else if (error.code === "auth/weak-password") {
+                    showMessage(
+                        "Please choose a stronger password.",
+                        "error"
+                    );
+                } else {
+                    showMessage(
+                        error.message,
+                        "error"
+                    );
+                }
+            }
+        });
+
+        /*
+         * ==========================================
+         * LOGIN
+         * ==========================================
+         */
+
+        loginForm.addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const email = loginEmail.value.trim();
+            const password = loginPassword.value;
+
+            try {
+                showMessage("Signing you in...", "info");
+
+                const userCredential =
+                    await signInWithEmailAndPassword(
+                        auth,
+                        email,
+                        password
+                    );
+
+                await userCredential.user.reload();
+
+                if (!userCredential.user.emailVerified) {
+                    showMessage(
+                        "Your email is not verified yet. Please check your inbox.",
+                        "error"
+                    );
+
+                    await signOut(auth);
+                    return;
+                }
+
+                showMessage(
+                    "Login successful!",
+                    "success"
+                );
+
+                loginForm.reset();
+
+            } catch (error) {
+
+                if (
+                    error.code === "auth/invalid-credential" ||
+                    error.code === "auth/wrong-password" ||
+                    error.code === "auth/user-not-found"
+                ) {
+                    showMessage(
+                        "Incorrect email or password.",
+                        "error"
+                    );
+                } else if (error.code === "auth/invalid-email") {
+                    showMessage(
+                        "Please enter a valid email address.",
+                        "error"
+                    );
+                } else {
+                    showMessage(
+                        error.message,
+                        "error"
+                    );
+                }
+            }
+        });
+
+        /*
+         * ==========================================
+         * RESEND VERIFICATION EMAIL
+         * ==========================================
+         */
+
+        resendButton.addEventListener("click", async function() {
+
+            const user = auth.currentUser;
+
+            if (!user) {
+                showMessage(
+                    "Please log in first.",
+                    "error"
+                );
+                return;
+            }
+
+            try {
+
+                await sendEmailVerification(user);
+
+                showMessage(
+                    "A new verification email has been sent.",
+                    "success"
+                );
+
+            } catch (error) {
+
+                showMessage(
+                    error.message,
+                    "error"
+                );
+            }
+        });
+
+        /*
+         * ==========================================
+         * LOGOUT
+         * ==========================================
+         */
+
+        logoutButton.addEventListener("click", async function() {
+
+            try {
+
+                await signOut(auth);
+
+                showMessage(
+                    "You have been logged out.",
+                    "success"
+                );
+
+            } catch (error) {
+
+                showMessage(
+                    error.message,
+                    "error"
+                );
+            }
+        });
+
+        /*
+         * ==========================================
+         * AUTH STATE
+         * ==========================================
+         */
+
+        onAuthStateChanged(auth, async function(user) {
+
+            if (!user) {
+
+                authSection.style.display = "block";
+                dashboard.style.display = "none";
+
+                return;
+            }
+
+            await user.reload();
+
+            if (!user.emailVerified) {
+
+                authSection.style.display = "block";
+                dashboard.style.display = "none";
+
+                return;
+            }
+
+            authSection.style.display = "none";
+            dashboard.style.display = "block";
+
+            userEmail.textContent = user.email;
+
+            verificationStatus.textContent =
+                "✓ Email verified";
+
+            verificationStatus.className =
+                "verified";
+        });
+    </script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+            min-height: 100vh;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #07111f,
+                    #102a43,
+                    #164e63
+                );
+
+            color: #ffffff;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 460px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .logo-circle {
+            width: 70px;
+            height: 70px;
+
+            margin: 0 auto 12px;
+
+            border-radius: 50%;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #00d4ff,
+                    #7c3aed
+                );
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            font-size: 25px;
+            font-weight: bold;
+
+            box-shadow:
+                0 10px 35px
+                rgba(0, 212, 255, 0.35);
+        }
+
+        .logo h1 {
+            font-size: 27px;
+        }
+
+        .logo p {
+            color: #b8c7d9;
+            margin-top: 5px;
+        }
+
+        .card {
+            background:
+                rgba(255,255,255,0.09);
+
+            border:
+                1px solid
+                rgba(255,255,255,0.15);
+
+            backdrop-filter: blur(15px);
+
+            border-radius: 22px;
+
+            padding: 28px;
+
+            box-shadow:
+                0 20px 60px
+                rgba(0,0,0,0.3);
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 25px;
+
+            background:
+                rgba(0,0,0,0.2);
+
+            padding: 5px;
+            border-radius: 12px;
+        }
+
+        .tab {
+            flex: 1;
+
+            border: none;
+            background: transparent;
+
+            color: #b8c7d9;
+
+            padding: 12px;
+
+            border-radius: 9px;
+
+            cursor: pointer;
+
+            font-size: 15px;
+            font-weight: bold;
+        }
+
+        .tab.active {
+            background: #ffffff;
+            color: #102a43;
+        }
+
+        .form {
+            display: none;
+        }
+
+        .form.visible {
+            display: block;
+        }
+
+        .form h2 {
+            margin-bottom: 7px;
+        }
+
+        .form-description {
+            color: #b8c7d9;
+            font-size: 14px;
+            margin-bottom: 22px;
+        }
+
+        .input-group {
+            margin-bottom: 17px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 7px;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+
+            padding: 14px;
+
+            border:
+                1px solid
+                rgba(255,255,255,0.2);
+
+            border-radius: 11px;
+
+            background:
+                rgba(0,0,0,0.2);
+
+            color: white;
+
+            outline: none;
+
+            font-size: 15px;
+        }
+
+        input:focus {
+            border-color: #00d4ff;
+        }
+
+        input::placeholder {
+            color: #8191a5;
+        }
+
+        .primary-button {
+            width: 100%;
+
+            border: none;
+
+            padding: 14px;
+
+            border-radius: 11px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #00d4ff,
+                    #7c3aed
+                );
+
+            color: white;
+
+            font-size: 16px;
+            font-weight: bold;
+
+            cursor: pointer;
+
+            margin-top: 5px;
+        }
+
+        .primary-button:hover {
+            opacity: 0.9;
+        }
+
+        .message {
+            margin-top: 18px;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .message:empty {
+            display: none;
+        }
+
+        .message.success {
+            background: rgba(34,197,94,0.15);
+            border: 1px solid rgba(34,197,94,0.4);
+        }
+
+        .message.error {
+            background: rgba(239,68,68,0.15);
+            border: 1px solid rgba(239,68,68,0.4);
+        }
+
+        .message.info {
+            background: rgba(59,130,246,0.15);
+            border: 1px solid rgba(59,130,246,0.4);
+        }
+
+        #dashboard {
+            display: none;
+        }
+
+        .dashboard-icon {
+            width: 75px;
+            height: 75px;
+
+            margin: 0 auto 20px;
+
+            border-radius: 50%;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #22c55e,
+                    #06b6d4
+                );
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            font-size: 34px;
+        }
+
+        .dashboard h2 {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .welcome {
+            text-align: center;
+            color: #b8c7d9;
+            margin-bottom: 25px;
+        }
+
+        .account-box {
+            background:
+                rgba(0,0,0,0.18);
+
+            padding: 17px;
+
+            border-radius: 13px;
+
+            margin-bottom: 20px;
+        }
+
+        .account-label {
+            color: #8fa3b8;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .account-email {
+            word-break: break-word;
+        }
+
+        .verified {
+            display: inline-block;
+
+            margin-top: 12px;
+
+            padding: 7px 11px;
+
+            border-radius: 20px;
+
+            background:
+                rgba(34,197,94,0.15);
+
+            color: #86efac;
+
+            font-size: 13px;
+        }
+
+        .logout-button {
+            width: 100%;
+
+            padding: 13px;
+
+            border-radius: 11px;
+
+            border:
+                1px solid
+                rgba(255,255,255,0.2);
+
+            background:
+                rgba(255,255,255,0.08);
+
+            color: white;
+
+            cursor: pointer;
+
+            font-size: 15px;
+        }
+
+        .resend-button {
+            width: 100%;
+
+            margin-top: 12px;
+
+            padding: 12px;
+
+            border: none;
+
+            background: transparent;
+
+            color: #67e8f9;
+
+            cursor: pointer;
+
+            font-size: 14px;
+        }
+
+        .footer {
+            text-align: center;
+
+            color: #8191a5;
+
+            font-size: 12px;
+
+            margin-top: 20px;
+        }
+
+        @media (max-width: 480px) {
+
+            body {
+                padding: 12px;
+            }
+
+            .card {
+                padding: 22px;
+            }
+
+            .logo h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="logo">
+
+        <div class="logo-circle">
+            E19
+        </div>
+
+        <h1>Emalawi19</h1>
+
+        <p>Secure account authentication</p>
+
+    </div>
+
+    <!-- AUTHENTICATION -->
+
+    <div id="authSection" class="card">
+
+        <div class="tabs">
+
+            <button
+                id="loginTab"
+                class="tab active">
+                Login
+            </button>
+
+            <button
+                id="registerTab"
+                class="tab">
+                Register
+            </button>
+
+        </div>
+
+        <!-- LOGIN -->
+
+        <form
+            id="loginBox"
+            class="form visible">
+
+            <h2>Welcome back</h2>
+
+            <p class="form-description">
+                Login to your Emalawi19 account.
+            </p>
+
+            <div class="input-group">
+
+                <label>Email address</label>
+
+                <input
+                    id="loginEmail"
+                    type="email"
+                    placeholder="you@example.com"
+                    required>
+
+            </div>
+
+            <div class="input-group">
+
+                <label>Password</label>
+
+                <input
+                    id="loginPassword"
+                    type="password"
+                    placeholder="Your password"
+                    required>
+
+            </div>
+
+            <button
+                type="submit"
+                class="primary-button">
+
+                Login
+
+            </button>
+
+        </form>
+
+        <!-- REGISTER -->
+
+        <form
+            id="registerBox"
+            class="form">
+
+            <h2>Create account</h2>
+
+            <p class="form-description">
+                Create your account and verify your email.
+            </p>
+
+            <div class="input-group">
+
+                <label>Email address</label>
+
+                <input
+                    id="registerEmail"
+                    type="email"
+                    placeholder="you@example.com"
+                    required>
+
+            </div>
+
+            <div class="input-group">
+
+                <label>Password</label>
+
+                <input
+                    id="registerPassword"
+                    type="password"
+                    placeholder="At least 6 characters"
+                    minlength="6"
+                    required>
+
+            </div>
+
+            <button
+                type="submit"
+                class="primary-button">
+
+                Create Account
+
+            </button>
+
+        </form>
+
+        <div id="message" class="message"></div>
+
+        <button
+            id="resendButton"
+            class="resend-button">
+
+            Resend verification email
+
+        </button>
+
+    </div>
+
+    <!-- DASHBOARD -->
+
+    <div id="dashboard" class="card">
+
+        <div class="dashboard-icon">
+            ✓
+        </div>
+
+        <h2>Account Verified</h2>
+
+        <p class="welcome">
+            Welcome to your Emalawi19 account.
+        </p>
+
+        <div class="account-box">
+
+            <div class="account-label">
+                EMAIL ADDRESS
+            </div>
+
+            <div
+                id="userEmail"
+                class="account-email">
+            </div>
+
+            <div
+ 
